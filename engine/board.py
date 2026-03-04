@@ -78,6 +78,9 @@ class Board:
                 return sq
         return -1
     
+    def _is_square_attacked(self,sq:int) -> bool:
+        pass
+    
     def copy(self) -> 'Board':
         new_board = Board.__new__(Board)
         new_board.squares = self.squares.copy()
