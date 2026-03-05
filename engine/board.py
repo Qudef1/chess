@@ -1,4 +1,5 @@
 from figures import *
+from move import Move, EN_PASSANT, NORMAL, CAPTURE, PROMOTION, DOUBLE_PAWN_PUSH
 
 class Board:
     def __init__(self):
@@ -78,8 +79,127 @@ class Board:
                 return sq
         return -1
     
-    def _is_square_attacked(self,sq:int) -> bool:
-        pass
+    def make_move(self,move:Move):
+        piece = self.get_piece(move.from_square)
+        captured_piece = self.get_piece(move.to_square)
+        old_castling = self.castling_rights
+        old_en_passant = self.en_passant_square
+
+        self.en_passant_square = -1
+        if move.flag == EN_PASSANT:
+            captured_pawn_sq = move.to_square + (8 if self.side_to_move == WHITE else -8)
+            self.set_piece(captured_pawn_sq, EMPTY)
+            self.set_piece(move.to_square, piece)
+
+        elif move.flag == DOUBLE_PAWN_PUSH:
+            self.en_passant_square = (move.from_square + move.to_square) // 2
+            self.set_piece(move.to_square, piece)
+
+        elif move.flag == PROMOTION:
+            self.set_piece(move.to_square, move.promotion)
+
+        # Обычный ход
+        else:
+            self.set_piece(move.to_square, piece)
+
+        self.set_piece(move.from_square, EMPTY)
+
+        # Обновить side_to_move
+        self.side_to_move = BLACK if self.side_to_move == WHITE else WHITE
+        
+        # Вернуть информацию о ходе для unmake
+        return (captured_piece, old_en_passant, piece)
+
+    def unmake_move(self, move: Move, captured_piece: int, old_en_passant: int, moved_piece: int) -> None:
+        """Отменить ход."""
+        # Для promotion восстанавливаем пешку, а не фигуру
+        if move.flag == PROMOTION:
+            # moved_piece уже содержит пешку (мы сохранили её перед make_move)
+            self.set_piece(move.from_square, moved_piece)
+        else:
+            self.set_piece(move.from_square, moved_piece)
+
+        self.set_piece(move.to_square, captured_piece)
+
+        # Вернуть en passant
+        self.en_passant_square = old_en_passant
+
+        # Вернуть пешку при en passant
+        if move.flag == EN_PASSANT:
+            captured_pawn_sq = move.to_square + (8 if self.side_to_move == WHITE else -8)
+            self.set_piece(captured_pawn_sq, captured_piece)
+
+        # Вернуть ход
+        self.side_to_move = BLACK if self.side_to_move == WHITE else WHITE
+
+    def is_square_attacked(self,sq:int,by_color:int) -> bool:
+        pawn_direction = 8 if by_color == WHITE else -8
+        pawn_attacks = [pawn_direction + 1, pawn_direction - 1]
+        for offset in pawn_attacks:
+            attacker = sq + offset
+            if 0<=attacker < 64:
+                piece = self.get_piece(attacker)
+                if piece == (WHITE_PAWN if by_color == WHITE else BLACK_PAWN):
+                    if abs(file_of(sq) - file_of(attacker)) == 1:
+                        return True
+                
+        knight = WHITE_KNIGHT if by_color == WHITE else BLACK_KNIGHT
+        knight_offsets = [-17, -15, -10, -6, 6, 10, 15, 17]
+        
+        for offset in knight_offsets:
+            attacker = sq + offset
+            if 0 <= attacker < 64:
+                piece = self.get_piece(attacker)
+                if piece == knight:
+                    if abs(file_of(sq) - file_of(attacker)) <= 2:
+                        return True
+        
+        # === Проверка атак королём ===
+        king = WHITE_KING if by_color == WHITE else BLACK_KING
+        king_offsets = [-9, -8, -7, -1, 1, 7, 8, 9]
+        
+        for offset in king_offsets:
+            attacker = sq + offset
+            if 0 <= attacker < 64:
+                piece = self.get_piece(attacker)
+                if piece == king:
+                    if abs(file_of(sq) - file_of(attacker)) <= 1:
+                        return True
+        
+        # === Проверка атак слоном/ферзём (диагонали) ===
+        bishop = WHITE_BISHOP if by_color == WHITE else BLACK_BISHOP
+        queen = WHITE_QUEEN if by_color == WHITE else BLACK_QUEEN
+        
+        for direction in [-9, -7, 7, 9]:
+            attacker = sq + direction
+            while 0 <= attacker < 64 and abs(file_of(sq) - file_of(attacker)) <= 1:
+                piece = self.get_piece(attacker)
+                if piece != EMPTY:
+                    if piece == bishop or piece == queen:
+                        return True
+                    break  # Фигура блокирует
+                attacker += direction
+        
+        # === Проверка атак ладьёй/ферзём (вертикали/горизонтали) ===
+        rook = WHITE_ROOK if by_color == WHITE else BLACK_ROOK
+        
+        for direction in [-8, -1, 1, 8]:
+            attacker = sq + direction
+            while 0 <= attacker < 64:
+                # Проверка для горизонталей
+                if direction in [-1, 1] and abs(file_of(sq) - file_of(attacker)) > 1:
+                    break
+                
+                piece = self.get_piece(attacker)
+                if piece != EMPTY:
+                    if piece == rook or piece == queen:
+                        return True
+                    break  # Фигура блокирует
+                attacker += direction
+        
+        return False
+    
+
     
     def copy(self) -> 'Board':
         new_board = Board.__new__(Board)
