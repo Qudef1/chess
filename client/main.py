@@ -63,11 +63,17 @@ def draw_board(screen, board: Board, selected_square=None, white_perspective=Tru
     for i in range(64):
         # Переворачиваем отображение клетки в зависимости от перспективы
         if white_perspective:
-            row = 7 - (i // 8)  # Инвертируем для pygame (y=0 сверху)
-            col = i % 8
+            # Белые снизу: a1 (0) → нижний левый угол
+            rank = i // 8  # 0-7
+            file = i % 8
+            row = 7 - rank  # Инвертируем для pygame (y=0 сверху)
+            col = file
         else:
-            row = i // 8
-            col = 7 - (i % 8)
+            # Чёрные снизу: a8 (56) → нижний левый угол
+            rank = i // 8  # 0-7
+            file = i % 8
+            row = rank  # Не инвертируем
+            col = 7 - file  # Зеркалим по горизонтали
         
         x = col * SQUARE_SIZE + BOARD_OFFSET
         y = row * SQUARE_SIZE + BOARD_OFFSET
@@ -87,11 +93,17 @@ def draw_board_with_pieces(screen, board: Board, renderer: PieceRenderer, select
     for square_index, piece_code in enumerate(board.squares):
         # Переворачиваем позицию отрисовки фигуры
         if white_perspective:
-            row = 7 - (square_index // 8)  # Инвертируем для pygame (y=0 сверху)
-            col = square_index % 8
+            # Белые снизу: a1 (0) → нижний левый угол
+            rank = square_index // 8
+            file = square_index % 8
+            row = 7 - rank  # Инвертируем для pygame (y=0 сверху)
+            col = file
         else:
-            row = square_index // 8
-            col = 7 - (square_index % 8)
+            # Чёрные снизу: a8 (56) → нижний левый угол
+            rank = square_index // 8
+            file = square_index % 8
+            row = rank  # Не инвертируем
+            col = 7 - file  # Зеркалим по горизонтали
         
         x = BOARD_OFFSET + col * SQUARE_SIZE
         y = BOARD_OFFSET + row * SQUARE_SIZE
@@ -104,11 +116,15 @@ def draw_legal_moves(screen, legal_moves: list, white_perspective=True):
     """Отрисовка подсветки доступных ходов."""
     for move in legal_moves:
         if white_perspective:
-            row = 7 - (move.to_square // 8)  # Инвертируем для pygame (y=0 сверху)
-            col = move.to_square % 8
+            rank = move.to_square // 8
+            file = move.to_square % 8
+            row = 7 - rank  # Инвертируем для pygame (y=0 сверху)
+            col = file
         else:
-            row = move.to_square // 8
-            col = 7 - (move.to_square % 8)
+            rank = move.to_square // 8
+            file = move.to_square % 8
+            row = rank  # Не инвертируем
+            col = 7 - file  # Зеркалим по горизонтали
         
         x = BOARD_OFFSET + col * SQUARE_SIZE
         y = BOARD_OFFSET + row * SQUARE_SIZE
@@ -162,13 +178,16 @@ def get_square_from_mouse(pos, white_perspective=True):
         row = (y - BOARD_OFFSET) // SQUARE_SIZE
         
         # Переворачиваем координаты в зависимости от перспективы
-        # В pygame y=0 сверху, поэтому инвертируем row для white_perspective
         if white_perspective:
             # row=0 (верх экрана) → rank 7, row=7 (низ экрана) → rank 0
-            return (7 - row) * 8 + col
+            rank = 7 - row
+            file = col
         else:
             # row=0 (верх экрана) → rank 0, row=7 (низ экрана) → rank 7
-            return row * 8 + (7 - col)
+            rank = row
+            file = 7 - col
+        
+        return rank * 8 + file
     return None
 
 
@@ -227,10 +246,15 @@ while running:
 
                     if move_to_make:
                         # Делаем ход
-                        captured = board.get_piece(move_to_make.to_square)
                         old_en_passant = board.en_passant_square
                         moved_piece = board.get_piece(move_to_make.from_square)
-                        board.make_move(move_to_make)
+                        result = board.make_move(move_to_make)
+                        
+                        # captured содержится в result[0]
+                        captured = result[0]
+
+                        # Для рокировки нужно передать old_castling в unmake_move
+                        old_castling = result[3] if len(result) > 3 else 0
 
                         # Переворачиваем доску после хода
                         white_perspective = not white_perspective
@@ -238,8 +262,7 @@ while running:
                         # Сбрасываем выделение
                         selected_square = None
                         legal_moves = []
-                        print(f"Ход сделан: {move_to_make.from_square} -> {move_to_make.to_square}")
-                        
+
                         # Проверяем на мат/пат
                         check_game_over()
 

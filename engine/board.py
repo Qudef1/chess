@@ -1,5 +1,5 @@
 from engine.figures import *
-from engine.move import Move, EN_PASSANT, NORMAL, CAPTURE, PROMOTION, DOUBLE_PAWN_PUSH
+from engine.move import Move, EN_PASSANT, NORMAL, CAPTURE, PROMOTION, DOUBLE_PAWN_PUSH, CASTLING
 
 class Board:
     def __init__(self):
@@ -81,63 +81,146 @@ class Board:
     
     def make_move(self,move:Move):
         piece = self.get_piece(move.from_square)
-        captured_piece = self.get_piece(move.to_square)
         old_castling = self.castling_rights
         old_en_passant = self.en_passant_square
 
         self.en_passant_square = -1
+        
+        # Для en passant captured_piece берётся не с to_square
         if move.flag == EN_PASSANT:
-            captured_pawn_sq = move.to_square + (8 if self.side_to_move == WHITE else -8)
+            captured_pawn_sq = move.to_square - 8 if get_piece_color(piece) == WHITE else move.to_square + 8
+            captured_piece = self.get_piece(captured_pawn_sq)
+        else:
+            captured_piece = self.get_piece(move.to_square)
+        
+        # Обновление прав на рокировку при ходе короля или ладьи
+        if piece == WHITE_KING:
+            self.castling_rights &= ~(WHITE_KINGSIDE | WHITE_QUEENSIDE)
+        elif piece == BLACK_KING:
+            self.castling_rights &= ~(BLACK_KINGSIDE | BLACK_QUEENSIDE)
+        elif piece == WHITE_ROOK:
+            if move.from_square == A1:
+                self.castling_rights &= ~WHITE_QUEENSIDE
+            elif move.from_square == H1:
+                self.castling_rights &= ~WHITE_KINGSIDE
+        elif piece == BLACK_ROOK:
+            if move.from_square == A8:
+                self.castling_rights &= ~BLACK_QUEENSIDE
+            elif move.from_square == H8:
+                self.castling_rights &= ~BLACK_KINGSIDE
+        
+        if move.flag == EN_PASSANT:
+            # При en passant сбитая пешка находится на клетке, которую она перепрыгнула
+            # Белые бьют на to_square, сбитая пешка на to_square - 8
+            # Чёрные бьют на to_square, сбитая пешка на to_square + 8
+            captured_pawn_sq = move.to_square - 8 if get_piece_color(piece) == WHITE else move.to_square + 8
             self.set_piece(captured_pawn_sq, EMPTY)
             self.set_piece(move.to_square, piece)
+            self.set_piece(move.from_square, EMPTY)
 
         elif move.flag == DOUBLE_PAWN_PUSH:
             self.en_passant_square = (move.from_square + move.to_square) // 2
             self.set_piece(move.to_square, piece)
+            self.set_piece(move.from_square, EMPTY)
 
         elif move.flag == PROMOTION:
             self.set_piece(move.to_square, move.promotion)
+            self.set_piece(move.from_square, EMPTY)
+            
+        elif move.flag == CASTLING:
+            # Рокировка: перемещаем короля и ладью
+            self.set_piece(move.to_square, piece)
+            self.set_piece(move.from_square, EMPTY)
+            
+            # Определяем тип рокировки по направлению
+            if move.to_square > move.from_square:  # Королевский фланг (вправо)
+                # Ладья с h-линии на f-линию
+                rook_from = H1 if piece == WHITE_KING else H8
+                rook_to = F1 if piece == WHITE_KING else F8
+            else:  # Ферзевый фланг (влево)
+                # Ладья с a-линии на d-линию
+                rook_from = A1 if piece == WHITE_KING else A8
+                rook_to = D1 if piece == WHITE_KING else D8
+            
+            rook = self.get_piece(rook_from)
+            self.set_piece(rook_to, rook)
+            self.set_piece(rook_from, EMPTY)
 
         # Обычный ход
         else:
             self.set_piece(move.to_square, piece)
-
-        self.set_piece(move.from_square, EMPTY)
+            self.set_piece(move.from_square, EMPTY)
 
         # Обновить side_to_move
         self.side_to_move = BLACK if self.side_to_move == WHITE else WHITE
-        
-        # Вернуть информацию о ходе для unmake
-        return (captured_piece, old_en_passant, piece)
 
-    def unmake_move(self, move: Move, captured_piece: int, old_en_passant: int, moved_piece: int) -> None:
+        # Вернуть информацию о ходе для unmake
+        return (captured_piece, old_en_passant, piece, old_castling)
+
+    def unmake_move(self, move: Move, captured_piece: int, old_en_passant: int, moved_piece: int, old_castling: int) -> None:
         """Отменить ход."""
         # Для promotion восстанавливаем пешку, а не фигуру
         if move.flag == PROMOTION:
             # moved_piece уже содержит пешку (мы сохранили её перед make_move)
             self.set_piece(move.from_square, moved_piece)
+            self.set_piece(move.to_square, captured_piece)
+        elif move.flag == CASTLING:
+            # Восстанавливаем короля и ладью
+            self.set_piece(move.from_square, moved_piece)
+            self.set_piece(move.to_square, EMPTY)
+
+            # Определяем тип рокировки по направлению
+            if move.to_square > move.from_square:  # Королевский фланг
+                rook_from = H1 if moved_piece == WHITE_KING else H8
+                rook_to = F1 if moved_piece == WHITE_KING else F8
+            else:  # Ферзевый фланг
+                rook_from = A1 if moved_piece == WHITE_KING else A8
+                rook_to = D1 if moved_piece == WHITE_KING else D8
+
+            rook = self.get_piece(rook_to)
+            self.set_piece(rook_from, rook)
+            self.set_piece(rook_to, EMPTY)
+        elif move.flag == EN_PASSANT:
+            # Восстанавливаем пешку на from_square
+            self.set_piece(move.from_square, moved_piece)
+            # Восстанавливаем сбитую пешку
+            captured_pawn_sq = move.to_square - 8 if get_piece_color(moved_piece) == WHITE else move.to_square + 8
+            self.set_piece(captured_pawn_sq, captured_piece)
+            # Очищаем to_square
+            self.set_piece(move.to_square, EMPTY)
         else:
             self.set_piece(move.from_square, moved_piece)
-
-        self.set_piece(move.to_square, captured_piece)
+            self.set_piece(move.to_square, captured_piece)
 
         # Вернуть en passant
         self.en_passant_square = old_en_passant
+        
+        # Вернуть права на рокировку
+        self.castling_rights = old_castling
 
         # Вернуть пешку при en passant
         if move.flag == EN_PASSANT:
-            captured_pawn_sq = move.to_square + (8 if self.side_to_move == WHITE else -8)
+            # При en passant сбитая пешка находится на клетке, которую она перепрыгнула
+            # Белые бьют на to_square, сбитая пешка на to_square - 8
+            # Чёрные бьют на to_square, сбитая пешка на to_square + 8
+            captured_pawn_sq = move.to_square - 8 if get_piece_color(moved_piece) == WHITE else move.to_square + 8
             self.set_piece(captured_pawn_sq, captured_piece)
 
         # Вернуть ход
         self.side_to_move = BLACK if self.side_to_move == WHITE else WHITE
 
     def is_square_attacked(self,sq:int,by_color:int) -> bool:
-        pawn_direction = 8 if by_color == WHITE else -8
-        pawn_attacks = [pawn_direction + 1, pawn_direction - 1]
+        # Пешки атакуют по диагонали вперёд
+        # Белые пешки атакуют +7 (влево-вверх) и +9 (вправо-вверх)
+        # Чёрные пешки атакуют -7 (влево-вниз) и -9 (вправо-вниз)
+        # Чтобы найти пешку, которая атакует короля, нужно искать в обратном направлении:
+        # Для белых: ищем на -7 (вправо-вниз) и -9 (влево-вниз) от короля
+        # Для чёрных: ищем на +7 (вправо-вверх) и +9 (влево-вверх) от короля
+        pawn_attacks = [-7, -9] if by_color == WHITE else [7, 9]
+        
         for offset in pawn_attacks:
             attacker = sq + offset
-            if 0<=attacker < 64:
+            if 0 <= attacker < 64:
                 piece = self.get_piece(attacker)
                 if piece == (WHITE_PAWN if by_color == WHITE else BLACK_PAWN):
                     if abs(file_of(sq) - file_of(attacker)) == 1:
