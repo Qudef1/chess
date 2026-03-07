@@ -145,8 +145,24 @@ while running:
                 idx = get_square_from_mouse(event.pos)
                 if idx is not None:
                     piece = board.get_piece(idx)
-                    # Если кликнули на фигуру текущего игрока
-                    if piece != EMPTY and get_piece_color(piece) == board.side_to_move:
+                    
+                    # Проверяем, есть ли ход на эту клетку в списке легальных
+                    move_to_make = next((m for m in legal_moves if m.to_square == idx), None)
+                    
+                    if move_to_make:
+                        # Делаем ход
+                        captured = board.get_piece(move_to_make.to_square)
+                        old_en_passant = board.en_passant_square
+                        moved_piece = board.get_piece(move_to_make.from_square)
+                        board.make_move(move_to_make)
+                        
+                        # Сбрасываем выделение
+                        selected_square = None
+                        legal_moves = []
+                        print(f"Ход сделан: {move_to_make.from_square} -> {move_to_make.to_square}")
+                    
+                    # Если кликнули на свою фигуру - выбираем её
+                    elif piece != EMPTY and get_piece_color(piece) == board.side_to_move:
                         selected_square = idx
                         # Генерируем все легальные ходы и фильтруем по выбранной клетке
                         all_legal_moves = move_generator.generate_legal_moves(board)

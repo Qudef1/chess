@@ -74,35 +74,54 @@ class MoveGenerator:
 
         return legal_moves
 
-    def _is_valid_move(self,from_sq:int,to_square:int,offset:int)->bool:
-        if to_square < 0 or to_square>63:
+    def _is_valid_square(self, sq: int) -> bool:
+        """Проверяет, что клетка находится в пределах доски."""
+        return 0 <= sq < 64
+
+    def _is_valid_step(self, from_sq: int, to_sq: int, offset: int) -> bool:
+        """
+        Проверяет, что переход на один шаг в заданном направлении корректен
+        (не пересекает край доски).
+        """
+        if not self._is_valid_square(to_sq):
             return False
-        
+
         from_file = file_of(from_sq)
-        to_file = file_of(to_square)
+        to_file = file_of(to_sq)
         file_diff = abs(from_file - to_file)
 
-        if abs(offset) in [15,17]:
+        # Конь
+        if abs(offset) in [15, 17]:
             return file_diff <= 2
-        if abs(offset) in [6,10]:
+        if abs(offset) in [6, 10]:
             return file_diff <= 1
-        
-        if offset in [1,-1]:
+
+        # Горизонтали (ладья)
+        if offset in [1, -1]:
             return file_diff == 1
-        if offset in [-9,7]:
-            return from_file == to_file + 1
-        if offset in [-7,9]:
-            return from_file == to_file - 1
-        
-        if offset == -8 or offset == 8:
+
+        # Диагонали (слон)
+        # +7 = влево-вверх (file -1), -7 = вправо-вниз (file +1)
+        # +9 = вправо-вверх (file +1), -9 = влево-вниз (file -1)
+        if offset == 7:    # влево-вверх
+            return to_file == from_file - 1
+        if offset == -7:   # вправо-вниз
+            return to_file == from_file + 1
+        if offset == 9:    # вправо-вверх
+            return to_file == from_file + 1
+        if offset == -9:   # влево-вниз
+            return to_file == from_file - 1
+
+        # Вертикали (ладья)
+        if offset in [-8, 8]:
             return True
-        
+
         return False
     
     def _generate_knight_moves(self,board:Board,sq:int,color:int,moves:list):
         for offset in self.KNIGHT_OFFSETS:
             target = sq + offset
-            if not self._is_valid_move(sq,target,offset):
+            if not self._is_valid_step(sq,target,offset):
                 continue
 
             piece = board.get_piece(target)
@@ -113,7 +132,7 @@ class MoveGenerator:
     def _generate_king_moves(self,board:Board,sq:int,color:int,moves:list):
         for offset in self.KING_OFFSETS:
             target = sq + offset
-            if not self._is_valid_move(sq,target,offset):
+            if not self._is_valid_step(sq,target,offset):
                 continue
 
             piece = board.get_piece(target)
@@ -129,7 +148,8 @@ class MoveGenerator:
     def _generate_bishop_moves(self,board:Board,sq:int,color:int,moves:list):
         for direction in self.BISHOP_DIRECTIONS:
             target = sq + direction
-            while self._is_valid_move(sq,target,direction):
+            prev = sq
+            while self._is_valid_step(prev, target, direction):
                 piece = board.get_piece(target)
                 if piece == EMPTY:
                     moves.append(Move(sq,target,NORMAL))
@@ -137,12 +157,14 @@ class MoveGenerator:
                     if get_piece_color(piece) != color:
                         moves.append(Move(sq,target,CAPTURE))
                     break
+                prev = target
                 target += direction
 
     def _generate_rook_moves(self,board:Board,sq:int,color:int,moves:list):
         for direction in self.ROOK_DIRECTIONS:
             target = sq + direction
-            while self._is_valid_move(sq,target,direction):
+            prev = sq
+            while self._is_valid_step(prev, target, direction):
                 piece = board.get_piece(target)
                 if piece == EMPTY:
                     moves.append(Move(sq,target,NORMAL))
@@ -150,6 +172,7 @@ class MoveGenerator:
                     if get_piece_color(piece) != color:
                         moves.append(Move(sq,target,CAPTURE))
                     break
+                prev = target
                 target += direction
 
     def _generate_queen_moves(self,board:Board,sq:int,color:int,moves:list):
@@ -182,7 +205,7 @@ class MoveGenerator:
 
         for offset in capture_offsets:
             target = sq + offset
-            if not self._is_valid_move(sq, target, offset):
+            if not self._is_valid_step(sq, target, offset):
                 continue
 
             piece = board.get_piece(target)
@@ -212,7 +235,7 @@ class MoveGenerator:
         for offset in capture_offsets:
             target = sq + offset
             if target == board.en_passant_square:
-                if self._is_valid_move(sq, target, offset):
+                if self._is_valid_step(sq, target, offset):
                     moves.append(Move(sq, target, EN_PASSANT))
                 break
 
