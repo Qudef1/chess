@@ -1,5 +1,5 @@
-from figures import *
-from move import Move, EN_PASSANT, NORMAL, CAPTURE, PROMOTION, DOUBLE_PAWN_PUSH
+from engine.figures import *
+from engine.move import Move, EN_PASSANT, NORMAL, CAPTURE, PROMOTION, DOUBLE_PAWN_PUSH
 
 class Board:
     def __init__(self):

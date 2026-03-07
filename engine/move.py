@@ -5,7 +5,7 @@ EN_PASSANT = 3
 PROMOTION = 4
 DOUBLE_PAWN_PUSH = 5
 
-from figures import *
+from engine.figures import *
 
 class Move:
     def __init__(self,from_square:int,to_square:int,flag:int,promotion:int=0):

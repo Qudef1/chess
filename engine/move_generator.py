@@ -1,6 +1,6 @@
-from figures import *
-from move import *
-from board import Board
+from engine.figures import *
+from engine.move import *
+from engine.board import Board
 
 class MoveGenerator:
     # Смещения для коня
