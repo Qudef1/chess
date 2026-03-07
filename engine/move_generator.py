@@ -91,10 +91,12 @@ class MoveGenerator:
         file_diff = abs(from_file - to_file)
 
         # Конь
+        # ±15, ±17 = 2 по вертикали + 1 по горизонтали → file_diff == 1
+        # ±6, ±10 = 1 по вертикали + 2 по горизонтали → file_diff == 2
         if abs(offset) in [15, 17]:
-            return file_diff <= 2
+            return file_diff == 1
         if abs(offset) in [6, 10]:
-            return file_diff <= 1
+            return file_diff == 2
 
         # Горизонтали (ладья)
         if offset in [1, -1]:

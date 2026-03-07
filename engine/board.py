@@ -24,15 +24,15 @@ class Board:
         self.squares[F1] = WHITE_BISHOP
         self.squares[G1] = WHITE_KNIGHT
         self.squares[H1] = WHITE_ROOK
-        
+
         # Белые пешки (2-я горизонталь)
         for file in range(8):
             self.squares[square(file, 1)] = WHITE_PAWN
-        
+
         # Чёрные пешки (7-я горизонталь)
         for file in range(8):
             self.squares[square(file, 6)] = BLACK_PAWN
-        
+
         # Чёрные фигуры (8-я горизонталь)
         self.squares[A8] = BLACK_ROOK
         self.squares[B8] = BLACK_KNIGHT
@@ -169,32 +169,55 @@ class Board:
         # === Проверка атак слоном/ферзём (диагонали) ===
         bishop = WHITE_BISHOP if by_color == WHITE else BLACK_BISHOP
         queen = WHITE_QUEEN if by_color == WHITE else BLACK_QUEEN
-        
+
         for direction in [-9, -7, 7, 9]:
             attacker = sq + direction
-            while 0 <= attacker < 64 and abs(file_of(sq) - file_of(attacker)) <= 1:
+            prev = sq
+            while 0 <= attacker < 64:
+                # Проверка, что шаг валиден (не пересекает край доски)
+                from_file = file_of(prev)
+                to_file = file_of(attacker)
+                # +7 = влево-вверх (file -1), -7 = вправо-вниз (file +1)
+                # +9 = вправо-вверх (file +1), -9 = влево-вниз (file -1)
+                if direction == 7 and to_file != from_file - 1:
+                    break
+                if direction == -7 and to_file != from_file + 1:
+                    break
+                if direction == 9 and to_file != from_file + 1:
+                    break
+                if direction == -9 and to_file != from_file - 1:
+                    break
+                
                 piece = self.get_piece(attacker)
                 if piece != EMPTY:
                     if piece == bishop or piece == queen:
                         return True
                     break  # Фигура блокирует
+                prev = attacker
                 attacker += direction
         
         # === Проверка атак ладьёй/ферзём (вертикали/горизонтали) ===
         rook = WHITE_ROOK if by_color == WHITE else BLACK_ROOK
-        
+
         for direction in [-8, -1, 1, 8]:
             attacker = sq + direction
+            prev = sq
             while 0 <= attacker < 64:
-                # Проверка для горизонталей
-                if direction in [-1, 1] and abs(file_of(sq) - file_of(attacker)) > 1:
-                    break
-                
+                # Проверка для горизонталей (file должен меняться на 1)
+                if direction in [-1, 1]:
+                    from_file = file_of(prev)
+                    to_file = file_of(attacker)
+                    if direction == 1 and to_file != from_file + 1:
+                        break
+                    if direction == -1 and to_file != from_file - 1:
+                        break
+
                 piece = self.get_piece(attacker)
                 if piece != EMPTY:
                     if piece == rook or piece == queen:
                         return True
                     break  # Фигура блокирует
+                prev = attacker
                 attacker += direction
         
         return False
