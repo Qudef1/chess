@@ -78,6 +78,46 @@ class Board:
             if self.squares[sq] ==king:
                 return sq
         return -1
+
+    def to_fen(self) -> str:
+        """Сформировать FEN-представление текущей позиции."""
+        piece_map = {
+            WHITE_PAWN: 'P', WHITE_KNIGHT: 'N', WHITE_BISHOP: 'B', WHITE_ROOK: 'R', WHITE_QUEEN: 'Q', WHITE_KING: 'K',
+            BLACK_PAWN: 'p', BLACK_KNIGHT: 'n', BLACK_BISHOP: 'b', BLACK_ROOK: 'r', BLACK_QUEEN: 'q', BLACK_KING: 'k',
+        }
+        ranks = []
+        for rank in range(7, -1, -1):
+            empty_count = 0
+            row = ''
+            for file in range(8):
+                sq = rank * 8 + file
+                piece = self.get_piece(sq)
+                if piece == EMPTY:
+                    empty_count += 1
+                else:
+                    if empty_count > 0:
+                        row += str(empty_count)
+                        empty_count = 0
+                    row += piece_map.get(piece, '?')
+            if empty_count > 0:
+                row += str(empty_count)
+            ranks.append(row)
+
+        castling = ''
+        if self.castling_rights & WHITE_KINGSIDE:
+            castling += 'K'
+        if self.castling_rights & WHITE_QUEENSIDE:
+            castling += 'Q'
+        if self.castling_rights & BLACK_KINGSIDE:
+            castling += 'k'
+        if self.castling_rights & BLACK_QUEENSIDE:
+            castling += 'q'
+        if castling == '':
+            castling = '-'
+
+        en_passant = '-' if self.en_passant_square == -1 else square_name(self.en_passant_square)
+        active_color = 'w' if self.side_to_move == WHITE else 'b'
+        return f"{'/'.join(ranks)} {active_color} {castling} {en_passant} {self.halfmove_clock} {self.fullmove_number}"
     
     def make_move(self,move:Move):
         piece = self.get_piece(move.from_square)

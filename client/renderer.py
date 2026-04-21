@@ -1,18 +1,30 @@
 """Рендерер фигур и отрисовка доски."""
 
-# добавить экран ожидания (поиск игры), индикатор подключения, цвет игрока (не переворачивать игру после каждого хода), кнопки сдаться и ничья
 import pygame
 from engine.board import Board
 from engine.figures import (
     WHITE_PAWN, WHITE_KNIGHT, WHITE_BISHOP, WHITE_ROOK, WHITE_QUEEN, WHITE_KING,
     BLACK_PAWN, BLACK_KNIGHT, BLACK_BISHOP, BLACK_ROOK, BLACK_QUEEN, BLACK_KING,
 )
-from constants import SQUARE_SIZE, BOARD_OFFSET, LIGHT_SQUARE, DARK_SQUARE, HIGHLIGHT, HINT
+from client.constants import (
+    SQUARE_SIZE,
+    BOARD_OFFSET,
+    LIGHT_SQUARE,
+    DARK_SQUARE,
+    HIGHLIGHT,
+    HINT,
+    PANEL_BG,
+    TEXT_COLOR,
+    STATUS_COLOR,
+    BOARD_SIZE,
+    UI_PANEL_WIDTH,
+    BUTTON_COLOR,
+)
 
 
 class PieceRenderer:
     """Класс для отрисовки шахматных фигур."""
-    
+
     def __init__(self):
         self.piece_images = {}
 
@@ -42,77 +54,39 @@ class PieceRenderer:
 
 
 def get_screen_coords(square_index: int, white_perspective: bool) -> tuple[int, int]:
-    """
-    Преобразовать индекс клетки (0-63) в экранные координаты.
-    
-    Args:
-        square_index: Индекс клетки (0 = a1, 63 = h8)
-        white_perspective: True если белые снизу, False если чёрные снизу
-    
-    Returns:
-        Кортеж (x, y) экранных координат
-    """
     rank = square_index // 8
     file = square_index % 8
-    
+
     if white_perspective:
-        # Белые снизу: a1 (0) → нижний левый угол
-        row = 7 - rank  # Инвертируем для pygame (y=0 сверху)
+        row = 7 - rank
         col = file
     else:
-        # Чёрные снизу: a8 (56) → нижний левый угол
-        row = rank  # Не инвертируем
-        col = 7 - file  # Зеркалим по горизонтали
-    
+        row = rank
+        col = 7 - file
+
     x = BOARD_OFFSET + col * SQUARE_SIZE
     y = BOARD_OFFSET + row * SQUARE_SIZE
     return x, y
 
 
 def get_square_from_mouse(pos: tuple[int, int], white_perspective: bool) -> int | None:
-    """
-    Преобразовать координаты мыши в индекс клетки.
-    
-    Args:
-        pos: Кортеж (x, y) координат мыши
-        white_perspective: True если белые снизу, False если чёрные снизу
-    
-    Returns:
-        Индекс клетки (0-63) или None если клик вне доски
-    """
     x, y = pos
-
-    if BOARD_OFFSET <= x < BOARD_OFFSET + SQUARE_SIZE * 8 and BOARD_OFFSET <= y < BOARD_OFFSET + SQUARE_SIZE * 8:
+    if BOARD_OFFSET <= x < BOARD_OFFSET + BOARD_SIZE and BOARD_OFFSET <= y < BOARD_OFFSET + BOARD_SIZE:
         col = (x - BOARD_OFFSET) // SQUARE_SIZE
         row = (y - BOARD_OFFSET) // SQUARE_SIZE
-
         if white_perspective:
-            # row=0 (верх экрана) → rank 7, row=7 (низ экрана) → rank 0
             rank = 7 - row
             file = col
         else:
-            # row=0 (верх экрана) → rank 0, row=7 (низ экрана) → rank 7
             rank = row
             file = 7 - col
-
         return rank * 8 + file
     return None
 
 
 def draw_board(screen: pygame.Surface, board: Board, selected_square: int | None = None, white_perspective: bool = True):
-    """
-    Отрисовать шахматную доску.
-    
-    Args:
-        screen: Pygame поверхность для отрисовки
-        board: Объект доски
-        selected_square: Индекс выбранной клетки или None
-        white_perspective: True если белые снизу, False если чёрные снизу
-    """
     for i in range(64):
         x, y = get_screen_coords(i, white_perspective)
-        
-        # Цвет клетки (шахматный порядок)
         rank = i // 8
         file = i % 8
         if white_perspective:
@@ -121,101 +95,64 @@ def draw_board(screen: pygame.Surface, board: Board, selected_square: int | None
         else:
             row = rank
             col = 7 - file
-        
         color = LIGHT_SQUARE if (row + col) % 2 == 0 else DARK_SQUARE
-
-        # Подсветка выбранной
         if selected_square is not None and i == selected_square:
             color = HIGHLIGHT
-
         pygame.draw.rect(screen, color, (x, y, SQUARE_SIZE, SQUARE_SIZE))
 
 
-def draw_pieces(screen: pygame.Surface, board: Board, renderer: PieceRenderer, white_perspective: bool = True):
-    """
-    Отрисовать фигуры на доске.
-    
-    Args:
-        screen: Pygame поверхность для отрисовки
-        board: Объект доски
-        renderer: Объект рендерера фигур
-        white_perspective: True если белые снизу, False если чёрные снизу
-    """
+def draw_pieces(screen: pygame.Surface, board: Board, renderer: PieceRenderer, white_perspective: bool = True, skip_squares: set[int] | None = None):
     for square_index, piece_code in enumerate(board.squares):
+        if skip_squares and square_index in skip_squares:
+            continue
         if piece_code != 0 and piece_code in renderer.piece_images:
             x, y = get_screen_coords(square_index, white_perspective)
             screen.blit(renderer.piece_images[piece_code], (x, y))
 
 
 def draw_legal_moves(screen: pygame.Surface, legal_moves: list, white_perspective: bool = True):
-    """
-    Отрисовать подсветку доступных ходов.
-    
-    Args:
-        screen: Pygame поверхность для отрисовки
-        legal_moves: Список доступных ходов
-        white_perspective: True если белые снизу, False если чёрные снизу
-    """
     for move in legal_moves:
         x, y = get_screen_coords(move.to_square, white_perspective)
-
-        # Рисуем полупрозрачный квадрат на клетке назначения
         hint_surface = pygame.Surface((SQUARE_SIZE, SQUARE_SIZE), pygame.SRCALPHA)
-        hint_surface.fill((*HINT, 100))  # Добавляем альфа-канал
+        hint_surface.fill((*HINT, 100))
         screen.blit(hint_surface, (x, y))
 
 
 def draw_game_over(screen: pygame.Surface, game_result: str | None, font: pygame.font.Font):
-    """
-    Отрисовать сообщение о конце игры.
-    
-    Args:
-        screen: Pygame поверхность для отрисовки
-        game_result: 'mate', 'stalemate' или None
-        font: Шрифт для отрисовки текста
-    """
     if game_result == 'mate':
-        text = font.render("Мат!", True, (255, 255, 255))
+        text = font.render('Мат!', True, (255, 255, 255))
     elif game_result == 'stalemate':
-        text = font.render("Пат! Ничья", True, (255, 255, 255))
+        text = font.render('Пат! Ничья', True, (255, 255, 255))
     else:
         return
-
     text_rect = text.get_rect(center=(screen.get_width() // 2, screen.get_height() // 2))
-
-    # Полупрозрачный фон
     overlay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
     overlay.fill((0, 0, 0, 128))
     screen.blit(overlay, (0, 0))
-
     screen.blit(text, text_rect)
 
 
-def draw_menu(screen: pygame.Surface, font: pygame.font.Font) -> pygame.Rect:
-    """
-    Отрисовать главное меню.
-    
-    Args:
-        screen: Pygame поверхность для отрисовки
-        font: Шрифт для отрисовки текста
-    
-    Returns:
-        Rect кнопки "Играть"
-    """
-    from constants import (
-        WIDTH, HEIGHT, BUTTON_COLOR, BUTTON_HOVER, TEXT_COLOR
-    )
-    
-    screen.fill((255, 255, 255))
-    mouse_pos = pygame.mouse.get_pos()
-    button_rect = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 - 50, 200, 100)
+def draw_side_panel(screen: pygame.Surface, font: pygame.font.Font, title: str, status_lines: list[str], panel_x: int, button_rects: list[pygame.Rect]):
+    panel_width = UI_PANEL_WIDTH - 40
+    panel_rect = pygame.Rect(panel_x, BOARD_OFFSET, panel_width, screen.get_height() - BOARD_OFFSET * 2)
+    pygame.draw.rect(screen, PANEL_BG, panel_rect, border_radius=12)
+    title_surface = font.render(title, True, TEXT_COLOR)
+    screen.blit(title_surface, (panel_x + 20, BOARD_OFFSET + 20))
 
-    # Проверка наведения мыши
-    color = BUTTON_HOVER if button_rect.collidepoint(mouse_pos) else BUTTON_COLOR
-    pygame.draw.rect(screen, color, button_rect)
+    y = BOARD_OFFSET + 80
+    for line in status_lines:
+        status_surface = font.render(line, True, STATUS_COLOR)
+        screen.blit(status_surface, (panel_x + 20, y))
+        y += 34
 
-    text = font.render("Играть", True, TEXT_COLOR)
-    text_rect = text.get_rect(center=button_rect.center)
-    screen.blit(text, text_rect)
+    for rect in button_rects:
+        pygame.draw.rect(screen, BUTTON_COLOR, rect, border_radius=10)
 
-    return button_rect
+
+def draw_text_box(screen: pygame.Surface, font: pygame.font.Font, header: str, body: str, rect: pygame.Rect):
+    pygame.draw.rect(screen, PANEL_BG, rect, border_radius=8)
+    header_surface = font.render(header, True, TEXT_COLOR)
+    body_surface = font.render(body, True, STATUS_COLOR)
+    screen.blit(header_surface, (rect.x + 12, rect.y + 12))
+    screen.blit(body_surface, (rect.x + 12, rect.y + 46))
+
