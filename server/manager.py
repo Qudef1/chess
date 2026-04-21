@@ -1,7 +1,7 @@
 import json
 from fastapi import WebSocket
-from models import ClientMessage
-from room import Room
+from server.models import ClientMessage
+from server.room import Room
 
 
 class RoomManager:

@@ -63,9 +63,6 @@ class ChessGame:
         # Для рокировки нужно передать old_castling в unmake_move
         old_castling = result[3] if len(result) > 3 else 0
 
-        # Переворачиваем доску после хода
-        self.white_perspective = not self.white_perspective
-
         # Сбрасываем выделение
         self.selected_square = None
         self.legal_moves = []

@@ -10,7 +10,7 @@ from engine.figures import WHITE, BLACK, WHITE_QUEEN, WHITE_ROOK, WHITE_BISHOP, 
 
 class StockfishEngine:
     def __init__(self, binary_path: Optional[str] = None, depth: int = 10):
-        self.binary_path = binary_path or os.path.join(os.path.dirname(__file__), 'stockfish')
+        self.binary_path = binary_path or os.path.join(os.path.dirname(__file__), 'stockfish.exe')  # Windows binary
         self.depth = depth
         self.available = self._find_binary() is not None
         self.binary = self._find_binary()
@@ -59,11 +59,12 @@ class StockfishEngine:
 
             proc.stdin.write('quit\n')
             proc.stdin.flush()
-            proc.wait(timeout=2)
+            proc.wait(timeout=5)  # Increase timeout
 
             if best_move:
                 return self._decode_uci(best_move, board)
-        except Exception:
+        except Exception as e:
+            print(f"Stockfish error: {e}")
             return self._fallback_move(board)
 
         return self._fallback_move(board)

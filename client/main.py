@@ -27,6 +27,12 @@ from engine.move import Move, EN_PASSANT
 from engine.figures import WHITE as FIG_WHITE, BLACK as FIG_BLACK
 
 pygame.init()
+pygame.mixer.init()
+# Load and play music
+music_file = os.path.join(os.path.dirname(__file__), '..', 'music', 'Skrillex - Bangarang.mp3')
+if os.path.exists(music_file):
+    pygame.mixer.music.load(music_file)
+    pygame.mixer.music.play(-1)  # Loop indefinitely
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption('Chess')
 font = pygame.font.SysFont('Arial', 24)
@@ -48,8 +54,7 @@ mode = 'local'
 player_color = FIG_WHITE
 my_turn = True
 online_status = 'Готов к игре'
-incoming_draw_offer = False
-outgoing_draw_offer = False
+draw_offer_pending = False
 sound_enabled = True
 music_enabled = True
 
@@ -111,6 +116,10 @@ def complete_move_animation():
 
     game.make_move(animation_move)
 
+    # For local mode, flip board after move
+    if mode == 'local':
+        game.white_perspective = not game.white_perspective
+
     if animation_is_remote:
         my_turn = True
     else:
@@ -161,6 +170,16 @@ def update_game_buttons() -> list[Button]:
     labels = ['Сдаться', 'Предложить ничью', 'Перезапустить', 'В меню']
     return [Button(text, pygame.Rect(x, y + i * (BUTTON_HEIGHT + BUTTON_SPACING), BUTTON_WIDTH, BUTTON_HEIGHT)) for i, text in enumerate(labels)]
 
+def get_active_game_buttons() -> list[Button]:
+    """Get game buttons appropriate for current mode."""
+    x = BOARD_OFFSET + BOARD_SIZE + BUTTON_SPACING
+    y = 140
+    if mode == 'online':
+        labels = ['Сдаться', 'Предложить ничью', 'В меню']
+    else:
+        labels = ['Сдаться', 'Предложить ничью', 'Перезапустить', 'В меню']
+    return [Button(text, pygame.Rect(x, y + i * (BUTTON_HEIGHT + BUTTON_SPACING), BUTTON_WIDTH, BUTTON_HEIGHT)) for i, text in enumerate(labels)]
+
 
 menu_buttons = update_menu_buttons()
 game_buttons = update_game_buttons()
@@ -176,19 +195,17 @@ def reset_game(new_mode: str):
     mode = new_mode
     game.reset()
     draw_offer_pending = False
+    player_color = FIG_WHITE
+    game.white_perspective = True  # Always show from white's perspective
     if mode == 'stockfish':
-        player_color = FIG_WHITE
         my_turn = True
         set_status('Игра против Stockfish. Вы белые.')
     elif mode == 'online':
-        player_color = FIG_WHITE
         my_turn = False
         set_status('Онлайн: ожидайте подключения.')
     else:
-        player_color = FIG_WHITE
         my_turn = True
         set_status('Локальная игра')
-    game.white_perspective = player_color == FIG_WHITE
 
 
 def apply_stockfish_move():
@@ -199,6 +216,10 @@ def apply_stockfish_move():
         best_move = random.choice(legal) if legal else None
     if best_move is not None:
         start_move_animation(best_move, on_complete=lambda: set_status('Ход компьютера выполнен.'))
+
+
+def on_network_message(message: dict):
+    network_events.put(message)
 
 
 def connect_online():
@@ -217,10 +238,12 @@ def disconnect_online():
         network_client = None
     set_status('Отключено от сервера.')
     my_turn = False
+    # Reset local game state when disconnecting from online
+    reset_game('local')
 
 
 def handle_network_events():
-    global game_state, my_turn, player_color, draw_offer_pending, network_client
+    global game_state, my_turn, player_color, draw_offer_pending, network_client, mode
     while not network_events.empty():
         message = network_events.get()
         event_type = message.get('type')
@@ -231,9 +254,13 @@ def handle_network_events():
         elif event_type == 'waiting':
             set_status(message.get('message', 'Ожидание соперника...'))
         elif event_type == 'game_start':
+            mode = 'online'
+            # Ensure a fresh board for the new online game
+            reset_game('online')
             color = message.get('payload', {}).get('color', 'white')
             player_color = FIG_WHITE if color == 'white' else FIG_BLACK
-            game.white_perspective = player_color == FIG_WHITE
+            # Keep white perspective (white at bottom)
+            game.white_perspective = (player_color == FIG_WHITE)
             my_turn = player_color == FIG_WHITE
             game_state = 'GAME'
             set_status(f'Игра началась. Вы {"белые" if player_color == FIG_WHITE else "чёрные"}.')
@@ -272,13 +299,16 @@ def handle_board_click(position: tuple[int, int]):
     global my_turn, draw_offer_pending
     if game.game_over:
         return
+    
+    # Block all board interactions during opponent's turn in online mode
+    if mode == 'online' and not my_turn:
+        return
+    
     idx = get_square_from_mouse(position, game.white_perspective)
     if idx is None:
         return
     move_to_make = game.get_move_for_square(idx)
     if move_to_make:
-        if mode == 'online' and not my_turn:
-            return
         if mode == 'online' and network_client:
             network_client.send_move(move_to_dict(move_to_make))
             my_turn = False
@@ -295,7 +325,7 @@ def handle_board_click(position: tuple[int, int]):
 
 
 def action_button_clicked(label: str):
-    global draw_offer_pending
+    global draw_offer_pending, game_state
     if label == 'Сдаться':
         if mode == 'online' and network_client:
             network_client.send_resign()
@@ -314,11 +344,18 @@ def action_button_clicked(label: str):
                 network_client.send_offer_draw()
                 set_status('Предложение ничьи отправлено.')
         else:
-            set_status('Ничья предложена. Игра окончена.')
-            game.game_over = True
-            game.game_result = 'stalemate'
+            # Local/Stockfish: require confirmation
+            if draw_offer_pending:
+                game.game_over = True
+                game.game_result = 'stalemate'
+                draw_offer_pending = False
+                set_status('Ничья принята.')
+            else:
+                draw_offer_pending = True
+                set_status('Ничья предложена. Нажмите ещё раз, чтобы принять.')
     elif label == 'Перезапустить':
-        reset_game(mode)
+        if mode != 'online':
+            reset_game(mode)
     elif label == 'В меню':
         disconnect_online()
         game_state = 'MENU'
@@ -362,12 +399,23 @@ while True:
                 elif back_button.contains(mouse_pos):
                     game_state = 'MENU'
             elif game_state == 'SETTINGS':
+                sound_button = Button(f"Звук: {'Вкл' if sound_enabled else 'Выкл'}", pygame.Rect(BOARD_OFFSET, 160, 200, 50))
+                music_button = Button(f"Музыка: {'Вкл' if music_enabled else 'Выкл'}", pygame.Rect(BOARD_OFFSET, 220, 200, 50))
                 back_button = Button('Назад', pygame.Rect(BOARD_OFFSET + BOARD_SIZE + BUTTON_SPACING, 260, BUTTON_WIDTH, BUTTON_HEIGHT))
-                if back_button.contains(mouse_pos):
+                if sound_button.contains(mouse_pos):
+                    sound_enabled = not sound_enabled
+                elif music_button.contains(mouse_pos):
+                    music_enabled = not music_enabled
+                    if music_enabled and os.path.exists(music_file):
+                        pygame.mixer.music.play(-1)
+                    else:
+                        pygame.mixer.music.stop()
+                elif back_button.contains(mouse_pos):
                     game_state = 'MENU'
             elif game_state == 'GAME':
                 clicked_button = False
-                for button in game_buttons:
+                active_buttons = get_active_game_buttons()
+                for button in active_buttons:
                     if button.contains(mouse_pos):
                         action_button_clicked(button.text)
                         clicked_button = True
@@ -397,10 +445,10 @@ while True:
     elif game_state == 'SETTINGS':
         title_surface = title_font.render('Настройки', True, (255, 255, 255))
         screen.blit(title_surface, (BOARD_OFFSET, 80))
-        sound_label = font.render(f"Звук: {'Вкл' if sound_enabled else 'Выкл'}", True, (220, 220, 220))
-        music_label = font.render(f"Музыка: {'Вкл' if music_enabled else 'Выкл'}", True, (220, 220, 220))
-        screen.blit(sound_label, (BOARD_OFFSET, 160))
-        screen.blit(music_label, (BOARD_OFFSET, 220))
+        sound_button = Button(f"Звук: {'Вкл' if sound_enabled else 'Выкл'}", pygame.Rect(BOARD_OFFSET, 160, 200, 50))
+        music_button = Button(f"Музыка: {'Вкл' if music_enabled else 'Выкл'}", pygame.Rect(BOARD_OFFSET, 220, 200, 50))
+        sound_button.draw(screen, font, pygame.mouse.get_pos())
+        music_button.draw(screen, font, pygame.mouse.get_pos())
         back_button = Button('Назад', pygame.Rect(BOARD_OFFSET + BOARD_SIZE + BUTTON_SPACING, 260, BUTTON_WIDTH, BUTTON_HEIGHT))
         back_button.draw(screen, font, pygame.mouse.get_pos())
     elif game_state == 'GAME':
@@ -410,7 +458,8 @@ while True:
         draw_moving_piece()
         if not game.game_over:
             draw_legal_moves(screen, game.legal_moves, game.white_perspective)
-        button_rects = [button.rect for button in game_buttons]
+        active_buttons = get_active_game_buttons()
+        button_rects = [button.rect for button in active_buttons]
         draw_side_panel(
             screen,
             font,
@@ -423,7 +472,7 @@ while True:
             BOARD_OFFSET + BOARD_SIZE + BUTTON_SPACING,
             button_rects,
         )
-        for button in game_buttons:
+        for button in active_buttons:
             button.draw(screen, font, pygame.mouse.get_pos())
         if game.game_over:
             draw_game_over(screen, game.game_result, title_font)

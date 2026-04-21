@@ -139,7 +139,7 @@ def draw_side_panel(screen: pygame.Surface, font: pygame.font.Font, title: str, 
     title_surface = font.render(title, True, TEXT_COLOR)
     screen.blit(title_surface, (panel_x + 20, BOARD_OFFSET + 20))
 
-    y = BOARD_OFFSET + 80
+    y = BOARD_OFFSET + 500  # Below buttons
     for line in status_lines:
         status_surface = font.render(line, True, STATUS_COLOR)
         screen.blit(status_surface, (panel_x + 20, y))

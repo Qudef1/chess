@@ -1,5 +1,5 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from manager import RoomManager
+from server.manager import RoomManager
 
 app = FastAPI()
 manager = RoomManager()
