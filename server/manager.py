@@ -60,7 +60,8 @@ class RoomManager:
         elif payload.type == 'offer_draw':
             await room.broadcast({'type': 'draw_offer', 'message': 'Соперник предлагает ничью.'}, exclude=websocket)
         elif payload.type == 'accept_draw':
-            await room.broadcast({'type': 'draw_accepted', 'message': 'Ничья принята.'}, exclude=websocket)
+            # Send draw_accepted to both players (not just opponent)
+            await room.broadcast({'type': 'draw_accepted', 'message': 'Ничья принята.'})
         elif payload.type == 'reject_draw':
             await room.broadcast({'type': 'draw_rejected', 'message': 'Предложение ничьи отклонено.'}, exclude=websocket)
         else:

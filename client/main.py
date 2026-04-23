@@ -8,13 +8,12 @@ from queue import Queue
 # Добавляем корень проекта в путь импорта
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from constants import WIDTH, HEIGHT, BLACK, BOARD_OFFSET, BOARD_SIZE, UI_PANEL_WIDTH, BUTTON_SPACING, BUTTON_WIDTH, BUTTON_HEIGHT
+from constants import WIDTH, HEIGHT, BOARD_OFFSET, BOARD_SIZE, UI_PANEL_WIDTH, BUTTON_SPACING, BUTTON_WIDTH, BUTTON_HEIGHT, LIGHT_SQUARE, DARK_SQUARE,  HIGHLIGHT, HINT
 from client.renderer import (
     PieceRenderer,
     draw_board,
     draw_pieces,
     draw_legal_moves,
-    draw_side_panel,
     get_screen_coords,
     get_square_from_mouse,
 )
@@ -23,7 +22,7 @@ from client.network import NetworkClient
 from client.game import ChessGame
 from client.sound_manager import SoundManager
 from stockfish.stockfish_engine import StockfishEngine
-from engine.move import Move, EN_PASSANT
+from engine.move import Move
 from engine.figures import WHITE as FIG_WHITE, BLACK as FIG_BLACK
 
 pygame.init()
@@ -61,8 +60,8 @@ online_status = 'Готов к игре'
 draw_offer_pending = False
 sound_enabled = True
 music_enabled = True
-sound_volume = 0.5
-music_volume = 0.5
+sound_volume = 0.2
+music_volume = 0.2
 
 # Settings input fields (created once and reused)
 sound_input_field = NumericInputField(pygame.Rect(BOARD_OFFSET + 220, 170, 100, 40), str(int(sound_volume * 100)))
@@ -72,54 +71,10 @@ music_input_field = NumericInputField(pygame.Rect(BOARD_OFFSET + 220, 230, 100, 
 THEMES = {
     'classic': {
         'name': 'Классическая',
-        'light_square': (240, 217, 181),
-        'dark_square': (181, 136, 99),
-        'highlight': (255, 255, 0),
-        'hint': (100, 255, 100),
         'panel_bg': (32, 32, 32),
         'text_color': (255, 255, 255),
         'status_color': (220, 220, 220),
-    },
-    'green': {
-        'name': 'Зелёная',
-        'light_square': (238, 238, 210),
-        'dark_square': (118, 150, 86),
-        'highlight': (255, 255, 0),
-        'hint': (100, 255, 100),
-        'panel_bg': (20, 40, 20),
-        'text_color': (255, 255, 255),
-        'status_color': (200, 220, 200),
-    },
-    'blue': {
-        'name': 'Синяя',
-        'light_square': (232, 235, 239),
-        'dark_square': (125, 148, 181),
-        'highlight': (255, 200, 0),
-        'hint': (80, 200, 80),
-        'panel_bg': (20, 30, 50),
-        'text_color': (255, 255, 255),
-        'status_color': (200, 210, 230),
-    },
-    'brown': {
-        'name': 'Коричневая',
-        'light_square': (255, 206, 158),
-        'dark_square': (209, 139, 71),
-        'highlight': (255, 255, 0),
-        'hint': (100, 255, 100),
-        'panel_bg': (40, 25, 15),
-        'text_color': (255, 255, 255),
-        'status_color': (220, 200, 180),
-    },
-    'purple': {
-        'name': 'Фиолетовая',
-        'light_square': (245, 235, 255),
-        'dark_square': (130, 90, 160),
-        'highlight': (255, 255, 0),
-        'hint': (100, 255, 100),
-        'panel_bg': (30, 15, 40),
-        'text_color': (255, 255, 255),
-        'status_color': (220, 200, 240),
-    },
+    }
 }
 
 current_theme = 'classic'
@@ -171,10 +126,6 @@ def start_move_animation(move: Move, is_remote: bool = False, is_stockfish: bool
     animation_is_stockfish = is_stockfish
     animation_on_complete = on_complete
 
-    if move.flag == EN_PASSANT:
-        animation_capture_sq = move.to_square - 8 if animation_piece > 0 else move.to_square + 8
-    else:
-        animation_capture_sq = move.to_square
 
 
 def complete_move_animation():
@@ -187,7 +138,10 @@ def complete_move_animation():
     game.check_game_over()
 
     if game.game_result == 'mate' and game.result is None:
-        game.result = 'win'
+        if mode == 'online' and animation_is_remote:
+            game.result = 'lose'
+        else:
+            game.result = 'win'
     elif game.game_result == 'stalemate':
         game.result = 'stalemate'
 
@@ -571,12 +525,12 @@ def draw_help_screen(screen: pygame.Surface, font: pygame.font.Font, title_font:
             'Цель игры — поставить мат королю противника.',
         ]),
         ('Фигуры и их ходы', [
-            'Король (♔/♚): ходит на 1 клетку в любом направлении.',
-            'Ферзь (♕/♛): ходит на любое количество клеток по вертикали, горизонтали или диагонали.',
-            'Ладья (♖/♜): ходит на любое количество клеток по вертикали или горизонтали.',
-            'Слон (♗/♝): ходит на любое количество клеток по диагонали.',
-            'Конь (♘/♞): ходит буквой «Г» (на 2 клетки в одном направлении и 1 в перпендикулярном).',
-            'Пешка (♙/♟): ходит вперёд на 1 клетку, бьёт по диагонали.',
+            'Король: ходит на 1 клетку в любом направлении.',
+            'Ферзь: ходит на любое количество клеток по вертикали, горизонтали или диагонали.',
+            'Ладья: ходит на любое количество клеток по вертикали или горизонтали.',
+            'Слон: ходит на любое количество клеток по диагонали.',
+            'Конь: ходит буквой «Г» (на 2 клетки в одном направлении и 1 в перпендикулярном).',
+            'Пешка: ходит вперёд на 1 клетку, бьёт по диагонали.',
         ]),
         ('Особые правила', [
             'Рокировка: король и ладья меняются местами, если между ними нет фигур.',
@@ -759,10 +713,10 @@ while True:
         back_button = Button('Назад', pygame.Rect(BOARD_OFFSET, HEIGHT - 80, 150, 50))
         draw_help_screen(screen, font, title_font, back_button)
     elif game_state == 'GAME':
-        LIGHT = get_theme_color('light_square')
-        DARK = get_theme_color('dark_square')
-        HIGHLIGHT = get_theme_color('highlight')
-        HINT_COLOR = get_theme_color('hint')
+        LIGHT = LIGHT_SQUARE
+        DARK = DARK_SQUARE
+        HIGHLIGHT = HIGHLIGHT
+        HINT_COLOR = HINT
         PANEL_BG = get_theme_color('panel_bg')
         TEXT_COLOR = get_theme_color('text_color')
         STATUS_COLOR = get_theme_color('status_color')
