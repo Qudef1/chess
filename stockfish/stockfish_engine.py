@@ -10,21 +10,32 @@ from engine.figures import WHITE, BLACK, WHITE_QUEEN, WHITE_ROOK, WHITE_BISHOP, 
 
 class StockfishEngine:
     def __init__(self, binary_path: Optional[str] = None, depth: int = 10):
-        self.binary_path = binary_path or os.path.join(os.path.dirname(__file__), 'stockfish.exe')  # Windows binary
         self.depth = depth
-        self.available = self._find_binary() is not None
-        self.binary = self._find_binary()
-
-    def _find_binary(self) -> Optional[str]:
-        if self.binary_path and os.path.exists(self.binary_path):
-            return self.binary_path
-        return shutil.which('stockfish')
+        candidates = []
+        if binary_path:
+            candidates.append(binary_path)
+        candidates.append(os.path.join(os.path.dirname(__file__), 'stockfish.exe'))
+        candidates.append(os.path.join(os.path.dirname(__file__), 'stockfish'))
+        candidates.append('stockfish.exe')
+        candidates.append('stockfish')
+        for path in candidates:
+            if path and os.path.exists(path) and os.path.isfile(path):
+                self.binary = path
+                self.available = True
+                return
+        for name in ['stockfish', 'stockfish.exe', 'stockfish64']:
+            found = shutil.which(name)
+            if found:
+                self.binary = found
+                self.available = True
+                return
+        self.binary = None
+        self.available = False
 
     def is_available(self) -> bool:
         return self.available
 
     def get_best_move(self, board: Board) -> Optional[Move]:
-        legal_moves = board.generate_legal_moves() if hasattr(board, 'generate_legal_moves') else None
         if not self.available:
             return self._fallback_move(board)
 
@@ -34,7 +45,7 @@ class StockfishEngine:
                 [self.binary],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
                 text=True,
                 bufsize=1,
             )
@@ -59,7 +70,7 @@ class StockfishEngine:
 
             proc.stdin.write('quit\n')
             proc.stdin.flush()
-            proc.wait(timeout=5)  # Increase timeout
+            proc.wait(timeout=10)
 
             if best_move:
                 return self._decode_uci(best_move, board)

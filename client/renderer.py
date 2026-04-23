@@ -84,7 +84,14 @@ def get_square_from_mouse(pos: tuple[int, int], white_perspective: bool) -> int 
     return None
 
 
-def draw_board(screen: pygame.Surface, board: Board, selected_square: int | None = None, white_perspective: bool = True):
+def draw_board(screen: pygame.Surface, board: Board, selected_square: int | None = None, white_perspective: bool = True,
+              light_square=None, dark_square=None, highlight=None):
+    if light_square is None:
+        light_square = LIGHT_SQUARE
+    if dark_square is None:
+        dark_square = DARK_SQUARE
+    if highlight is None:
+        highlight = HIGHLIGHT
     for i in range(64):
         x, y = get_screen_coords(i, white_perspective)
         rank = i // 8
@@ -95,9 +102,9 @@ def draw_board(screen: pygame.Surface, board: Board, selected_square: int | None
         else:
             row = rank
             col = 7 - file
-        color = LIGHT_SQUARE if (row + col) % 2 == 0 else DARK_SQUARE
+        color = light_square if (row + col) % 2 == 0 else dark_square
         if selected_square is not None and i == selected_square:
-            color = HIGHLIGHT
+            color = highlight
         pygame.draw.rect(screen, color, (x, y, SQUARE_SIZE, SQUARE_SIZE))
 
 
@@ -110,11 +117,13 @@ def draw_pieces(screen: pygame.Surface, board: Board, renderer: PieceRenderer, w
             screen.blit(renderer.piece_images[piece_code], (x, y))
 
 
-def draw_legal_moves(screen: pygame.Surface, legal_moves: list, white_perspective: bool = True):
+def draw_legal_moves(screen: pygame.Surface, legal_moves: list, white_perspective: bool = True, hint_color=None):
+    if hint_color is None:
+        hint_color = HINT
     for move in legal_moves:
         x, y = get_screen_coords(move.to_square, white_perspective)
         hint_surface = pygame.Surface((SQUARE_SIZE, SQUARE_SIZE), pygame.SRCALPHA)
-        hint_surface.fill((*HINT, 100))
+        hint_surface.fill((*hint_color, 100))
         screen.blit(hint_surface, (x, y))
 
 
@@ -132,16 +141,24 @@ def draw_game_over(screen: pygame.Surface, game_result: str | None, font: pygame
     screen.blit(text, text_rect)
 
 
-def draw_side_panel(screen: pygame.Surface, font: pygame.font.Font, title: str, status_lines: list[str], panel_x: int, button_rects: list[pygame.Rect]):
+def draw_side_panel(screen: pygame.Surface, font: pygame.font.Font, title: str, status_lines: list[str],
+                    panel_x: int, button_rects: list[pygame.Rect],
+                    panel_bg=None, text_color=None, status_color=None):
+    if panel_bg is None:
+        panel_bg = PANEL_BG
+    if text_color is None:
+        text_color = TEXT_COLOR
+    if status_color is None:
+        status_color = STATUS_COLOR
     panel_width = UI_PANEL_WIDTH - 40
     panel_rect = pygame.Rect(panel_x, BOARD_OFFSET, panel_width, screen.get_height() - BOARD_OFFSET * 2)
-    pygame.draw.rect(screen, PANEL_BG, panel_rect, border_radius=12)
-    title_surface = font.render(title, True, TEXT_COLOR)
+    pygame.draw.rect(screen, panel_bg, panel_rect, border_radius=12)
+    title_surface = font.render(title, True, text_color)
     screen.blit(title_surface, (panel_x + 20, BOARD_OFFSET + 20))
 
     y = BOARD_OFFSET + 500  # Below buttons
     for line in status_lines:
-        status_surface = font.render(line, True, STATUS_COLOR)
+        status_surface = font.render(line, True, status_color)
         screen.blit(status_surface, (panel_x + 20, y))
         y += 34
 

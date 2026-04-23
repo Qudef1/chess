@@ -14,7 +14,8 @@ class ChessGame:
         self.legal_moves = []
         self.white_perspective = True  # Белые снизу
         self.game_over = False
-        self.game_result = None  # 'mate', 'stalemate', None
+        self.game_result = None  # 'mate', 'stalemate'
+        self.result = None       # 'win', 'lose', 'stalemate' — для игрока
 
     def reset(self):
         """Сбросить игру к начальной позиции."""
@@ -24,6 +25,7 @@ class ChessGame:
         self.white_perspective = True
         self.game_over = False
         self.game_result = None
+        self.result = None
 
     def select_square(self, square_index: int):
         """
@@ -82,14 +84,17 @@ class ChessGame:
             enemy_color = BLACK if self.board.side_to_move == WHITE else WHITE
             if self.board.is_square_attacked(king_sq, enemy_color):
                 self.game_result = 'mate'
-                winner = 'Белые' if self.board.side_to_move == BLACK else 'Чёрные'
-                print(f"Мат! Победили {winner}")
+                # Победил тот, чей ход сейчас (сделал последний ход — поставил мат)
+                self.result = None  # Определяется на уровне main.py с учётом режима
+                print(f"Мат! Победили {'белые' if self.board.side_to_move == BLACK else 'чёрные'}")
             else:
                 self.game_result = 'stalemate'
+                self.result = 'stalemate'
                 print("Пат! Ничья")
         else:
             self.game_over = False
             self.game_result = None
+            self.result = None
 
     def get_move_for_square(self, square_index: int):
         """
