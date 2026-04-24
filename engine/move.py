@@ -44,23 +44,4 @@ class Move:
             self.flag == other.flag and
             self.promotion == other.promotion
         )
-    
-    # for network transfer
-    # def encode(self) -> int:
-    #     """Кодировать ход в одно число (для сети)."""
-    #     return (
-    #         self.from_square |
-    #         (self.to_square << 6) |
-    #         (self.promotion << 12) |
-    #         (self.flag << 15)
-    #     )
-    
-    # @staticmethod
-    # def decode(value: int) -> 'Move':
-    #     """Декодировать ход из числа."""
-    #     return Move(
-    #         from_square=value & 0x3F,
-    #         to_square=(value >> 6) & 0x3F,
-    #         promotion=(value >> 12) & 0x7,
-    #         flag=(value >> 15) & 0x7
-    #     )
+

@@ -45,7 +45,7 @@ clock = pygame.time.Clock()
 game = ChessGame()
 renderer = PieceRenderer()
 renderer.load_pieces()
-stockfish_engine = StockfishEngine(depth=1)
+stockfish_engine = StockfishEngine(depth=10)
 sound_manager = SoundManager()
 
 network_events = Queue()
@@ -133,12 +133,13 @@ def complete_move_animation():
 
     if not animation_active or animation_move is None:
         return
-
     game.make_move(animation_move)
     game.check_game_over()
 
     if game.game_result == 'mate' and game.result is None:
         if mode == 'online' and animation_is_remote:
+            game.result = 'lose'
+        elif mode == "stockfish" and animation_is_stockfish:
             game.result = 'lose'
         else:
             game.result = 'win'
